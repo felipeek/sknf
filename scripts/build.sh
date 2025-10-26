@@ -3,7 +3,7 @@
 mkdir -p bin
 
 # dynamic linking
-gcc -O0 -g -Wall -o bin/cni-plugin src/main.c $(pkg-config --cflags --libs libnl-3.0 libnl-route-3.0 json-c)
+gcc -O0 -g -Wall -Wno-parentheses -o bin/cni-plugin src/main.c $(pkg-config --cflags --libs libnl-3.0 libnl-route-3.0 json-c)
 
 # static linking
 #gcc -O0 -g -Wall -o bin/cni-plugin src/main.c -static $(pkg-config --cflags --libs --static libnl-3.0 libnl-route-3.0 json-c)
