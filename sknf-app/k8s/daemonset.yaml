@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sknf
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: sknf
+  template:
+    metadata:
+      labels:
+        app: sknf
+    spec:
+      # ensure pods run on control-plane nodes too
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+      containers:
+      - name: sknf
+        image: IMAGE_HERE
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c", "hello"]
+        volumeMounts:
+        - name: host-cni-bin
+          mountPath: /host/opt/cni/bin
+        - name: host-cni-conf
+          mountPath: /host/etc/cni/net.d
+        env:
+        - name: CNI_PLUGIN_BINARY_CONTAINER_PATH_ENV_KEY
+          value: /home/sknf/sknf-cni/bin/sknf-cni
+        - name: CNI_PLUGIN_CONF_CONTAINER_PATH_ENV_KEY
+          value: /home/sknf/sknf-cni/conf/sknf-cni-conf.json
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_CIDR
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podCIDR
+
+      volumes:
+      - name: host-cni-bin
+        hostPath:
+          path: /opt/cni/bin
+          type: Directory
+      - name: host-cni-conf
+        hostPath:
+          path: /etc/cni/net.d
+          type: DirectoryOrCreate

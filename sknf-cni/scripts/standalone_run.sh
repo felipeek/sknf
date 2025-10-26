@@ -6,4 +6,4 @@ export CNI_NETNS=/var/run/netns/testing
 export CNI_IFNAME=eth0
 export CNI_PATH=./bin
 
-./bin/cni-plugin < ./conf/conf.json
+./bin/sknf-cni < ./conf/conf.json
