@@ -1,4 +1,4 @@
-CNI_SRC := sknf-cni/src/main.c
+CNI_SRC := sknf-cni/src/main.c sknf-cni/src/io.c sknf-cni/src/ip.c sknf-cni/src/network.c sknf-cni/src/util.c
 CNI_BIN := sknf-cni/bin/sknf-cni
 CNI_CFLAGS := -O0 -g -Wall -Wno-parentheses
 CNI_LIBS := $(shell pkg-config --cflags --libs libnl-3.0 libnl-route-3.0 json-c)

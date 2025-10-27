@@ -1,17 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <json-c/json.h>
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <net/if.h>
-#include <linux/if_link.h>
-#include <errno.h>
-
-#include <netlink/netlink.h>
-#include <netlink/socket.h>
-#include <netlink/route/link.h>
-#include <netlink/route/link/veth.h>
+#include "network.h"
+#include "ip.h"
 
 #define CNI_COMMAND_ENV_VAR_NAME "CNI_COMMAND"
 #define CNI_CONTAINERID_ENV_VAR_NAME "CNI_CONTAINERID"
@@ -22,9 +15,9 @@
 #define CNI_VERSION_STDIN_JSON_KEY "cniVersion"
 #define NAME_STDIN_JSON_KEY "name"
 #define TYPE_STDIN_JSON_KEY "type"
+#define SUBNET_STDIN_JSON_KEY "subnet"
 
-#define HOST_BRIDGE_NAME "brcni"
-#define HOST_VETH_PREFIX "vethcni-"
+#define CNI_VERSION "0.4.0"
 
 // TODO: dynamic buffer
 #define INPUT_BUFFER_SIZE (64 * 1024)
@@ -36,162 +29,30 @@ static void mock_stdin_input() {
 	fclose(f);
 }
 
-static int create_bridge(struct nl_sock* sk) {
-	int nl_err;
+static void emit_response(const char* address) {
+	struct json_object* json_response_obj = json_object_new_object();
 
-	// create an rtnl_link to contain solely the desired change diff
-	struct rtnl_link* bridge_link;
-	bridge_link = rtnl_link_alloc();
-	if (!bridge_link) {
-		fprintf(stderr, "failure allocating rtnl_link\n");
-		// todo: free resources
-		return 1;
-	}
+	json_object_object_add(json_response_obj, "cniVersion", json_object_new_string(CNI_VERSION));
 
-	rtnl_link_set_name(bridge_link, HOST_BRIDGE_NAME);
-	rtnl_link_set_type(bridge_link, "bridge");
+	// interfaces array
+	struct json_object* interfaces_arr = json_object_new_array();
+	struct json_object* iface_obj = json_object_new_object();
+	json_object_object_add(iface_obj, "name", json_object_new_string("eth0"));
+	json_object_array_add(interfaces_arr, iface_obj);
+	json_object_object_add(json_response_obj, "interfaces", interfaces_arr);
 
-	if (nl_err = rtnl_link_add(sk, bridge_link, NLM_F_CREATE)) {
-		fprintf(stderr, "failure creating bridge: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
+	// ips array
+	struct json_object* ips_arr = json_object_new_array();
+	struct json_object* ip_obj = json_object_new_object();
+	json_object_object_add(ip_obj, "version", json_object_new_string("4"));
+	json_object_object_add(ip_obj, "address", json_object_new_string(address));
+	json_object_object_add(ip_obj, "interface", json_object_new_int(0));
+	json_object_array_add(ips_arr, ip_obj);
+	json_object_object_add(json_response_obj, "ips", ips_arr);
 
-	return 0;
-}
-
-static int create_veth(struct nl_sock* sk, int container_netns_fd, const char* container_veth_name, const char* host_veth_name) {
-	int nl_err;
-
-	// Create veth pair
-	if (nl_err = rtnl_link_veth_add(sk, host_veth_name, container_veth_name, getpid())) {
-		fprintf(stderr, "failure creating veth: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	int ifidx = if_nametoindex(container_veth_name);
-	struct rtnl_link* peer_link;
-	struct rtnl_link* changes_link;
-
-	// fetches a reference (rtnl_link) to container's veth interface from kernel
-	if (nl_err = rtnl_link_get_kernel(sk, ifidx, NULL, &peer_link)) {
-		fprintf(stderr, "failure filling rtnl_link information from kernel: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	// create an rtnl_link to contain solely the desired change diff
-	changes_link = rtnl_link_alloc();
-	if (!changes_link) {
-		fprintf(stderr, "failure allocating rtnl_link\n");
-		// todo: free resources
-		return 1;
-	}
-
-	// set interface; set the new desired network namespace (container's)
-	rtnl_link_set_ifindex(changes_link, ifidx);
-	rtnl_link_set_ns_fd(changes_link, container_netns_fd);
-
-	// apply changes (to change veth-ctn's network namespace)
-	if (nl_err = rtnl_link_change(sk, peer_link, changes_link, 0)) {
-		fprintf(stderr, "failure moving veth to container network namespace: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	rtnl_link_put(peer_link);
-	rtnl_link_put(changes_link);
-	return 0;
-}
-
-static int attach_host_veth_to_bridge(struct nl_sock* sk, const char* host_veth_name) {
-	int nl_err;
-	struct rtnl_link* bridge_link;
-	struct rtnl_link* veth_link;
-	struct rtnl_link* changes_link;
-
-	// fetches a reference (rtnl_link) to the bridge interface from kernel
-	if (nl_err = rtnl_link_get_kernel(sk, 0, HOST_BRIDGE_NAME, &bridge_link)) {
-		fprintf(stderr, "failure filling bridge information from kernel: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	// fetches a reference (rtnl_link) to container's veth interface from kernel
-	if (nl_err = rtnl_link_get_kernel(sk, 0, host_veth_name, &veth_link)) {
-		fprintf(stderr, "failure filling host's veth information from kernel: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	// create an rtnl_link to contain solely the desired change diff
-	changes_link = rtnl_link_alloc();
-	if (!changes_link) {
-		fprintf(stderr, "failure allocating rtnl_link\n");
-		// todo: free resources
-		return 1;
-	}
-
-	// set interface; set the new desired network namespace (container's)
-	rtnl_link_set_ifindex(changes_link, if_nametoindex(host_veth_name));
-	rtnl_link_set_master(changes_link, rtnl_link_get_ifindex(bridge_link));
-	if (rtnl_link_change(sk, veth_link, changes_link, 0)) {
-		fprintf(stderr, "failure enslaving host's veth to bridge: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	return 0;
-}
-
-static int setup_network(const char* container_netns_name, const char* container_netif_name) {
-	int nl_err;
-
-	// Create netlink socket
-	struct nl_sock* sk = nl_socket_alloc();
-	if (!sk) {
-		fprintf(stderr, "error allocating netlink socket\n");
-		// todo: free resources
-		return 1;
-	}
-	if (nl_err = nl_connect(sk, NETLINK_ROUTE)) { // NETLINK_ROUTE is one of netlink protocols; used for interfaces, routing, etc.
-		fprintf(stderr, "error creating/connecting to netlink socket: %s\n", nl_geterror(nl_err));
-		// todo: free resources
-		return 1;
-	}
-
-	// file descriptor for the target network namespace
-	int container_netns_fd = open(container_netns_name, O_RDONLY | O_CLOEXEC);
-	if (container_netns_fd < 0) {
-		fprintf(stderr, "failure opening target net namespace fd: %s\n", strerror(errno));
-		// todo: free resources
-		return 1;
-	}
-
-	const char* host_veth_name = HOST_VETH_PREFIX;
-
-	if (create_bridge(sk)) {
-		fprintf(stderr, "failure creating bridge\n");
-		// todo: free resources
-		return 1;
-	}
-
-	if (create_veth(sk, container_netns_fd, container_netif_name, host_veth_name)) {
-		fprintf(stderr, "failure creating veth\n");
-		// todo: free resources
-		return 1;
-	}
-
-	if (attach_host_veth_to_bridge(sk, host_veth_name)) {
-		fprintf(stderr, "failure attaching veth to bridge\n");
-		// todo: free resources
-		return 1;
-	}
-
-	close(container_netns_fd);
-	nl_socket_free(sk);
-	return 0;
+	fprintf(stderr, "emit_response: emitting response: %s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	printf("%s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	json_object_put(json_response_obj);
 }
 
 int main() {
@@ -206,10 +67,12 @@ int main() {
 	struct json_object* cni_version_obj;
 	struct json_object* name_obj;
 	struct json_object* type_obj;
+	struct json_object* subnet_obj;
 
 	const char* cni_version = NULL;
 	const char* name = NULL;
 	const char* type = NULL;
+	const char* subnet = NULL;
 	
 	if (!json_object_object_get_ex(parsed_input, CNI_VERSION_STDIN_JSON_KEY, &cni_version_obj)) {
 		fprintf(stderr, "missing cni_version\n");
@@ -229,9 +92,16 @@ int main() {
 		return 1;
 	}
 
+	if (!json_object_object_get_ex(parsed_input, SUBNET_STDIN_JSON_KEY, &subnet_obj)) {
+		fprintf(stderr, "missing subnet\n");
+		// todo: free resources
+		return 1;
+	}
+
 	cni_version = json_object_get_string(cni_version_obj);
 	name = json_object_get_string(name_obj);
 	type = json_object_get_string(type_obj);
+	subnet = json_object_get_string(subnet_obj);
 
 	//fprintf(stderr, "cni version is %s\n", cni_version);
 	//fprintf(stderr, "name is %s\n", name);
@@ -249,10 +119,22 @@ int main() {
 	fprintf(stderr, "cni_ifname is %s\n", cni_ifname);
 	fprintf(stderr, "cni_path is %s\n", cni_path);
 
-	if (setup_network(cni_netns, cni_ifname)) {
+	if (strcmp(cni_version, CNI_VERSION)) {
+		fprintf(stderr, "unsupported CNI version, requires %s, received %s\n", CNI_VERSION, cni_version);
+		return 1;
+	}
+
+	if (network_setup(cni_netns, cni_ifname)) {
 		fprintf(stderr, "failure setting up network\n");
 		return 1;
 	}
+
+	char ip_address[256];
+	if (ip_acquire(subnet, ip_address, 256)) {
+		fprintf(stderr, "failure acquiring an IP address\n");
+		return 1;
+	}
+	emit_response(ip_address);
 
 	json_object_put(parsed_input);
 

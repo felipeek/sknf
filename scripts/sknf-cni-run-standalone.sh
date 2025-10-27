@@ -1,9 +1,10 @@
-ip link del veth-host 2>/dev/null || true
+#!/bin/bash
+./scripts/clean_network.sh
 
 export CNI_COMMAND=ADD
 export CNI_CONTAINERID=cnitool-77383ca0a0715733ca6f
 export CNI_NETNS=/var/run/netns/testing
 export CNI_IFNAME=eth0
-export CNI_PATH=./bin
+export CNI_PATH=./sknf-cni/bin
 
-./bin/sknf-cni < ./conf/conf.json
+./bin/sknf-cni < ./sknf-cni/conf/example-conf.json

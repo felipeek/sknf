@@ -1,10 +1,11 @@
-sudo ip link del veth-host 2>/dev/null || true
+#!/bin/bash
+./scripts/clean_network.sh
 
-sudo gdb ./bin/sknf-cni \
+sudo gdb ./sknf-cni/bin/sknf-cni \
 	-ex "set environment CNI_COMMAND ADD" \
 	-ex "set environment CNI_CONTAINERID cnitool-77383ca0a0715733ca6f" \
 	-ex "set environment CNI_NETNS /var/run/netns/testing" \
 	-ex "set environment CNI_IFNAME eth0" \
-	-ex "set environment CNI_PATH ./bin"
+	-ex "set environment CNI_PATH ./sknf-cni/bin"
 
-# (gdb) run < ./conf/conf.json
+# (gdb) run < ./sknf-cni/conf/example-conf.json
