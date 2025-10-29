@@ -6,7 +6,7 @@
 #include "ip.h"
 #include "network.h"
 
-static void emit_add_response(const char* address) {
+static void emit_add_response(const struct Args* args, const char* address) {
 	struct json_object* json_response_obj = json_object_new_object();
 
 	json_object_object_add(json_response_obj, "cniVersion", json_object_new_string(CNI_VERSION));
@@ -27,14 +27,23 @@ static void emit_add_response(const char* address) {
 	json_object_array_add(ips_arr, ip_obj);
 	json_object_object_add(json_response_obj, "ips", ips_arr);
 
+    if (args->prev_result != NULL) {
+        json_object_object_add(json_response_obj, "prevResult", args->prev_result);
+    }
+
 	fprintf(stderr, "emit_response: emitting response: %s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
 	printf("%s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
 	json_object_put(json_response_obj);
 }
 
 int cmd_add(const struct Args* args) {
-	if (network_setup(args->cni_netns, args->cni_ifname)) {
-		fprintf(stderr, "failure setting up network\n");
+    // TODO: Return error if interface already exists in container
+
+    // TODO: set IP to interface
+    // TODO: set routes (probably not needed for L2 communication)
+
+	if (network_attach_container(args->cni_netns, args->cni_ifname, args->cni_containerid)) {
+		fprintf(stderr, "failure attaching container network\n");
 		return 1;
 	}
 
@@ -43,6 +52,15 @@ int cmd_add(const struct Args* args) {
 		fprintf(stderr, "failure acquiring an IP address\n");
 		return 1;
 	}
-	emit_add_response(ip_address);
+	emit_add_response(args, ip_address);
+    return 0;
+}
+
+int cmd_del(const struct Args* args) {
+    if (network_detach_container(args->cni_netns, args->cni_ifname, args->cni_containerid)) {
+		fprintf(stderr, "failure detaching container network\n");
+		return 1;
+    }
+
     return 0;
 }

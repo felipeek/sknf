@@ -15,6 +15,21 @@
 
 #include "util.h"
 
+static void generate_deterministic_if_name(
+	char buffer[16],
+	const char* container_netns_name,
+	const char* container_netif_name,
+	const char* container_id
+) {
+	unsigned h = 2166136261u; // FNV-1a offset basis
+	h ^= util_fnv1a32(container_netns_name);
+	h ^= util_fnv1a32(container_netif_name);
+	h ^= util_fnv1a32(container_id);
+
+	// Name pattern: 'v' + 8 hex chars (total 9 <= 15). Always NUL-terminated.
+	snprintf(buffer, 16, "v%08x", h);
+}
+
 static int create_bridge(struct nl_sock* sk) {
 	int nl_err;
 
@@ -72,7 +87,7 @@ static int create_veth(struct nl_sock* sk, int container_netns_fd, const char* c
 	rtnl_link_set_ifindex(changes_link, ifidx);
 	rtnl_link_set_ns_fd(changes_link, container_netns_fd);
 
-	// apply changes (to change veth-ctn's network namespace)
+	// apply changes (to change container's veth network namespace)
 	if (nl_err = rtnl_link_change(sk, peer_link, changes_link, 0)) {
 		fprintf(stderr, "failure moving veth to container network namespace: %s\n", nl_geterror(nl_err));
 		// todo: free resources
@@ -97,7 +112,7 @@ static int attach_host_veth_to_bridge(struct nl_sock* sk, const char* host_veth_
 		return 1;
 	}
 
-	// fetches a reference (rtnl_link) to container's veth interface from kernel
+	// fetches a reference (rtnl_link) to host's veth interface from kernel
 	if (nl_err = rtnl_link_get_kernel(sk, 0, host_veth_name, &veth_link)) {
 		fprintf(stderr, "failure filling host's veth information from kernel: %s\n", nl_geterror(nl_err));
 		// todo: free resources
@@ -112,7 +127,7 @@ static int attach_host_veth_to_bridge(struct nl_sock* sk, const char* host_veth_
 		return 1;
 	}
 
-	// set interface; set the new desired network namespace (container's)
+	// fetches a reference (rtnl_link) to veth interface from kernel
 	rtnl_link_set_ifindex(changes_link, if_nametoindex(host_veth_name));
 	rtnl_link_set_master(changes_link, rtnl_link_get_ifindex(bridge_link));
 	if (rtnl_link_change(sk, veth_link, changes_link, 0)) {
@@ -124,7 +139,7 @@ static int attach_host_veth_to_bridge(struct nl_sock* sk, const char* host_veth_
 	return 0;
 }
 
-int network_setup(const char* container_netns_name, const char* container_netif_name) {
+int network_attach_container(const char* container_netns_name, const char* container_netif_name, const char* container_id) {
 	int nl_err;
 
 	// Create netlink socket
@@ -148,10 +163,8 @@ int network_setup(const char* container_netns_name, const char* container_netif_
 		return 1;
 	}
 
-	char buf_suffix[16];
-	util_random_alphanumeric_6(buf_suffix);
-	char host_veth_name[64];
-	snprintf(host_veth_name, 64, "%s%s", HOST_VETH_PREFIX, buf_suffix);
+	char host_veth_name[16];
+	generate_deterministic_if_name(host_veth_name, container_netns_name, container_netif_name, container_id);
 
 	if (create_bridge(sk)) {
 		fprintf(stderr, "failure creating bridge\n");
@@ -172,6 +185,45 @@ int network_setup(const char* container_netns_name, const char* container_netif_
 	}
 
 	close(container_netns_fd);
+	nl_socket_free(sk);
+	return 0;
+}
+
+int network_detach_container(const char* container_netns_name, const char* container_netif_name, const char* container_id) {
+	int nl_err;
+
+	// Create netlink socket
+	struct nl_sock* sk = nl_socket_alloc();
+	if (!sk) {
+		fprintf(stderr, "error allocating netlink socket\n");
+		// todo: free resources
+		return 1;
+	}
+	if (nl_err = nl_connect(sk, NETLINK_ROUTE)) { // NETLINK_ROUTE is one of netlink protocols; used for interfaces, routing, etc.
+		fprintf(stderr, "error creating/connecting to netlink socket: %s\n", nl_geterror(nl_err));
+		// todo: free resources
+		return 1;
+	}
+
+	char host_veth_name[16];
+	generate_deterministic_if_name(host_veth_name, container_netns_name, container_netif_name, container_id);
+
+	// fetches a reference (rtnl_link) to host's veth interface from kernel
+	struct rtnl_link* link;
+	if (nl_err = rtnl_link_get_kernel(sk, 0, host_veth_name, &link)) {
+		fprintf(stderr, "failure filling rtnl_link information from kernel: %s\n", nl_geterror(nl_err));
+		// todo: free resources
+		return 1;
+	}
+
+	// delete the link (this also removes the peer end of the veth)
+	if (nl_err = rtnl_link_delete(sk, link) < 0) {
+		fprintf(stderr, "failure deleting veth pair %s: %s\n", host_veth_name, nl_geterror(nl_err));
+		// todo: free resources
+		return 1;
+	}
+
+	rtnl_link_put(link);
 	nl_socket_free(sk);
 	return 0;
 }

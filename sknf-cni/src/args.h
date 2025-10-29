@@ -11,6 +11,7 @@ struct Args {
 	const char* cni_netns;
 	const char* cni_ifname;
 	const char* cni_path;
+    const void* prev_result;
 
     void* json_input; // internal
 };

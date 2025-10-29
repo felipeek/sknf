@@ -15,6 +15,7 @@
 #define NAME_STDIN_JSON_KEY "name"
 #define TYPE_STDIN_JSON_KEY "type"
 #define SUBNET_STDIN_JSON_KEY "subnet"
+#define PREV_RESULT_STDIN_JSON_KEY "prevResult"
 
 // TODO: dynamic buffer
 #define INPUT_BUFFER_SIZE (64 * 1024)
@@ -98,6 +99,7 @@ int args_parse(struct Args* args) {
 	struct json_object* name_obj;
 	struct json_object* type_obj;
 	struct json_object* subnet_obj;
+	struct json_object* prev_result_obj;
 
 	if (json_object_object_get_ex(args->json_input, CNI_VERSION_STDIN_JSON_KEY, &cni_version_obj)) {
         args->cni_version = json_object_get_string(cni_version_obj);
@@ -114,6 +116,10 @@ int args_parse(struct Args* args) {
 	if (json_object_object_get_ex(args->json_input, SUBNET_STDIN_JSON_KEY, &subnet_obj)) {
         args->subnet = json_object_get_string(subnet_obj);
 	}
+
+    if (json_object_object_get_ex(args->json_input, PREV_RESULT_STDIN_JSON_KEY, &prev_result_obj)) {
+        args->prev_result = prev_result_obj;
+    }
 
 	args->cni_command = getenv(CNI_COMMAND_ENV_VAR_NAME);
 	args->cni_containerid = getenv(CNI_CONTAINERID_ENV_VAR_NAME);

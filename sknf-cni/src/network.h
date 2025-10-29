@@ -4,6 +4,7 @@
 #define HOST_BRIDGE_NAME "brsknf"
 #define HOST_VETH_PREFIX "vethsknf-"
 
-int network_setup(const char* container_netns_name, const char* container_netif_name);
+int network_attach_container(const char* container_netns_name, const char* container_netif_name, const char* container_id);
+int network_detach_container(const char* container_netns_name, const char* container_netif_name, const char* container_id);
 
 #endif

@@ -4,14 +4,12 @@
 #include <string.h>
 #include <time.h>
 
-void util_random_alphanumeric_6(char *buf) {
-    static const char alnum[] =
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789";
-
-    for (int i = 0; i < 6; i++) {
-        buf[i] = alnum[rand() % (sizeof(alnum) - 1)];
-    }
-    buf[6] = '\0';
+unsigned util_fnv1a32(const char *s) {
+	const unsigned FNV_PRIME = 16777619u;
+	unsigned h = 2166136261u;
+	for (; *s; ++s) {
+		h ^= (unsigned char)*s;
+		h *= FNV_PRIME;
+	}
+	return h;
 }

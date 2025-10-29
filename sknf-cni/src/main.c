@@ -16,6 +16,7 @@ int main() {
 	if (!strcmp(args.cni_command, CNI_CMD_ADD)) {
 		return cmd_add(&args);
 	} else if (!strcmp(args.cni_command, CNI_CMD_DEL)) {
+		return cmd_del(&args);
 	} else if (!strcmp(args.cni_command, CNI_CMD_CHECK)) {
 	} else {
 		fprintf(stderr, "failure: received unknown command %s\n", args.cni_command);
