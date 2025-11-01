@@ -9,10 +9,11 @@
 
 #define IP_INFO_FILE_PATH "/tmp/sknf-cni-ips"
 
-int ip_acquire(const char* cidr, char* buffer, int buf_size) {
+int ip_acquire(Err* err, const char* cidr, char* buffer, int buf_size) {
     if (!cidr || !buffer || buf_size < INET_ADDRSTRLEN + 4) {
         fprintf(stderr, "ip_acquire: invalid args or small buffer\n");
-        return -1;
+        ERR(err, "Ip_acquire: invalid args or small buffer");
+        return 1;
     }
 
     size_t file_length = 0;
@@ -23,7 +24,8 @@ int ip_acquire(const char* cidr, char* buffer, int buf_size) {
         int rc = io_read_file_into(IP_INFO_FILE_PATH, buffer, (size_t)buf_size, &file_length);
         if (rc != 0) {
             fprintf(stderr, "ip_acquire: failure reading '%s' (rc=%d)\n", IP_INFO_FILE_PATH, rc);
-            return -1;
+            ERRF(err, "Ip_acquire: failure reading file", "'%s' (rc=%d)", IP_INFO_FILE_PATH, rc);
+            return 1;
         }
 
         // Trim trailing whitespace and ensure NUL
@@ -43,7 +45,8 @@ int ip_acquire(const char* cidr, char* buffer, int buf_size) {
     char* slash = strchr(buffer, '/');
     if (!slash) {
         fprintf(stderr, "ip_acquire: CIDR missing '/': %s\n", buffer);
-        return -1;
+        ERRF(err, "Ip_acquire: CIDR missing '/'", "%s", buffer);
+        return 1;
     }
     int mask = atoi(slash + 1);
     *slash = '\0'; // remove IP prefix, keeping only IP address
@@ -51,7 +54,8 @@ int ip_acquire(const char* cidr, char* buffer, int buf_size) {
     struct in_addr addr;
     if (inet_pton(AF_INET, buffer, &addr) != 1) {
         fprintf(stderr, "ip_acquire: invalid IPv4 '%s'\n", buffer);
-        return -1;
+        ERRF(err, "Ip_acquire: invalid IPv4", "'%s'", buffer);
+        return 1;
     }
 
     uint32_t ip_int = ntohl(addr.s_addr);
@@ -61,7 +65,8 @@ int ip_acquire(const char* cidr, char* buffer, int buf_size) {
     char ip_only[INET_ADDRSTRLEN] = {0};
     if (!inet_ntop(AF_INET, &addr, ip_only, sizeof(ip_only))) {
         fprintf(stderr, "ip_acquire: inet_ntop failed\n");
-        return -1;
+        ERR(err, "Ip_acquire: inet_ntop failed");
+        return 1;
     }
 
     // Recompose full CIDR into buffer
@@ -70,7 +75,8 @@ int ip_acquire(const char* cidr, char* buffer, int buf_size) {
     // Persist the full CIDR
     if (io_write_text(IP_INFO_FILE_PATH, buffer) != 0) {
         fprintf(stderr, "ip_acquire: failed writing '%s'\n", buffer);
-        return -1;
+        ERRF(err, "Ip_acquire: failed writing", "'%s'", buffer);
+        return 1;
     }
 
     return 0;
