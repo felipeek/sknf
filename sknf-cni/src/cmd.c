@@ -6,7 +6,7 @@
 #include "ip.h"
 #include "network.h"
 
-static void emit_add_response(const struct Args* args, const char* address) {
+static void emit_add_response(const struct Args* args, const char* container_netif_cidr) {
 	struct json_object* json_response_obj = json_object_new_object();
 
 	json_object_object_add(json_response_obj, "cniVersion", json_object_new_string(CNI_VERSION));
@@ -22,7 +22,7 @@ static void emit_add_response(const struct Args* args, const char* address) {
 	struct json_object* ips_arr = json_object_new_array();
 	struct json_object* ip_obj = json_object_new_object();
 	json_object_object_add(ip_obj, "version", json_object_new_string("4"));
-	json_object_object_add(ip_obj, "address", json_object_new_string(address));
+	json_object_object_add(ip_obj, "address", json_object_new_string(container_netif_cidr));
 	json_object_object_add(ip_obj, "interface", json_object_new_int(0));
 	json_object_array_add(ips_arr, ip_obj);
 	json_object_object_add(json_response_obj, "ips", ips_arr);
@@ -42,17 +42,18 @@ int cmd_add(const struct Args* args) {
     // TODO: set IP to interface
     // TODO: set routes (probably not needed for L2 communication)
 
-	if (network_attach_container(args->cni_netns, args->cni_ifname, args->cni_containerid)) {
+	char container_netif_cidr[256];
+	if (ip_acquire(args->subnet, container_netif_cidr, 256)) {
+		fprintf(stderr, "failure acquiring an IP address\n");
+		return 1;
+	}
+
+	if (network_attach_container(args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid)) {
 		fprintf(stderr, "failure attaching container network\n");
 		return 1;
 	}
 
-	char ip_address[256];
-	if (ip_acquire(args->subnet, ip_address, 256)) {
-		fprintf(stderr, "failure acquiring an IP address\n");
-		return 1;
-	}
-	emit_add_response(args, ip_address);
+	emit_add_response(args, container_netif_cidr);
     return 0;
 }
 
