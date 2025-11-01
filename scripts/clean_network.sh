@@ -5,6 +5,8 @@ set -u
 sudo ip link del brsknf
 sudo ip netns del testing
 sudo ip netns add testing
+sudo ip netns del testing2
+sudo ip netns add testing2
 
 # Remove veth interfaces corresponding to vethsknf-*
 PREFIX="sknf"

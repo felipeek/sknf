@@ -36,6 +36,32 @@ static void emit_add_response(const struct Args* args, const char* container_net
 	json_object_put(json_response_obj);
 }
 
+static void emit_version_response(const struct Args* args) {
+	struct json_object* json_response_obj = json_object_new_object();
+
+	json_object_object_add(json_response_obj, "cniVersion", json_object_new_string(CNI_VERSION));
+	struct json_object* supported_versions_array = json_object_new_array();
+	json_object_array_add(supported_versions_array, json_object_new_string(CNI_VERSION));
+	json_object_object_add(json_response_obj, "supportedVersions", supported_versions_array);
+
+	fprintf(stderr, "emit_response: emitting response: %s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	printf("%s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	json_object_put(json_response_obj);
+}
+
+static void emit_error_response() {
+	struct json_object* json_response_obj = json_object_new_object();
+
+	json_object_object_add(json_response_obj, "cniVersion", json_object_new_string(CNI_VERSION));
+	json_object_object_add(json_response_obj, "code", json_object_new_int(100));
+	json_object_object_add(json_response_obj, "msg", json_object_new_string("An unexpected error happened"));
+	json_object_object_add(json_response_obj, "details", json_object_new_string("An unexpected error happened"));
+
+	fprintf(stderr, "emit_response: emitting response: %s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	printf("%s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
+	json_object_put(json_response_obj);
+}
+
 int cmd_add(const struct Args* args) {
     // TODO: Return error if interface already exists in container
 
@@ -45,11 +71,13 @@ int cmd_add(const struct Args* args) {
 	char container_netif_cidr[256];
 	if (ip_acquire(args->subnet, container_netif_cidr, 256)) {
 		fprintf(stderr, "failure acquiring an IP address\n");
+		emit_error_response();
 		return 1;
 	}
 
 	if (network_attach_container(args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid)) {
 		fprintf(stderr, "failure attaching container network\n");
+		emit_error_response();
 		return 1;
 	}
 
@@ -60,8 +88,26 @@ int cmd_add(const struct Args* args) {
 int cmd_del(const struct Args* args) {
     if (network_detach_container(args->cni_netns, args->cni_ifname, args->cni_containerid)) {
 		fprintf(stderr, "failure detaching container network\n");
+		emit_error_response();
 		return 1;
     }
 
     return 0;
+}
+
+int cmd_status(const struct Args* args) {
+	return 0;
+}
+
+int cmd_check(const struct Args* args) {
+	return 0;
+}
+
+int cmd_version(const struct Args* args) {
+	emit_version_response(args);
+	return 0;
+}
+
+int cmd_gc(const struct Args* args) {
+	return 0;
 }
