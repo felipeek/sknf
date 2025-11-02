@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-func Copy(srcpath, dstpath string) (err error) {
+func Copy(srcpath, dstpath string, mode os.FileMode) (err error) {
 	r, err := os.Open(srcpath)
 	if err != nil {
 		return err
@@ -26,6 +26,11 @@ func Copy(srcpath, dstpath string) (err error) {
 	}()
 
 	_, err = io.Copy(w, r)
+	if err != nil {
+		return err
+	}
+
+	err = w.Chmod(mode)
 	return err
 }
 

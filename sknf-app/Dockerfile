@@ -19,12 +19,7 @@ WORKDIR /home/sknf
 
 COPY --chown=sknf:sknf . .
 
-RUN mkdir -p sknf-cni/bin && \
-    gcc -O0 -g -Wall -Wno-parentheses \
-        -o sknf-cni/bin/sknf-cni \
-        sknf-cni/src/main.c \
-        $(pkg-config --cflags --libs libnl-3.0 libnl-route-3.0 json-c)
-
-RUN cd sknf-app && mkdir -p bin && go build -o bin/sknf-app .
+RUN make build-sknf-cni
+RUN make build-sknf-app
 
 CMD ["./sknf-app/bin/sknf-app"]

@@ -12,8 +12,18 @@ spec:
       labels:
         app: sknf
     spec:
-      # ensure pods run on control-plane nodes too
+      serviceAccountName: sknf
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+      # ensure pods run on control-plane nodes too
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
         effect: "NoSchedule"
@@ -23,11 +33,14 @@ spec:
 
       containers:
       - name: sknf
-        image: IMAGE_HERE
+        image: sknf
         imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
-        command: ["/bin/sh", "-c", "hello"]
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: false
         volumeMounts:
         - name: host-cni-bin
           mountPath: /host/opt/cni/bin
@@ -42,10 +55,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: POD_CIDR
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podCIDR
 
       volumes:
       - name: host-cni-bin
