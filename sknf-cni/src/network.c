@@ -57,6 +57,7 @@ static int create_bridge(Err* err, struct nl_sock* sk) {
 
 	rtnl_link_set_name(bridge_link, HOST_BRIDGE_NAME);
 	rtnl_link_set_type(bridge_link, "bridge");
+	rtnl_link_set_flags(bridge_link, IFF_UP);
 
 	if (nl_err = rtnl_link_add(sk, bridge_link, NLM_F_CREATE)) {
 		fprintf(stderr, "failure creating bridge: %s\n", nl_geterror(nl_err));
@@ -193,11 +194,13 @@ static int create_veth(Err* err, struct nl_sock* sk, int container_netns_fd, con
 	}
 
 	int ifidx = if_nametoindex(container_veth_tmp_name);
-	struct rtnl_link* peer_link;
-	struct rtnl_link* changes_link;
+	struct rtnl_link* container_veth_link;
+	struct rtnl_link* container_veth_changes_link;
+	struct rtnl_link* host_veth_link;
+	struct rtnl_link* host_veth_changes_link;
 
 	// fetches a reference (rtnl_link) to container's veth interface from kernel
-	if (nl_err = rtnl_link_get_kernel(sk, ifidx, NULL, &peer_link)) {
+	if (nl_err = rtnl_link_get_kernel(sk, ifidx, NULL, &container_veth_link)) {
 		fprintf(stderr, "failure filling rtnl_link information from kernel: %s\n", nl_geterror(nl_err));
 		// todo: free resources
 		ERRF(err, "Failure filling rtnl_link information from kernel", "%s", nl_geterror(nl_err));
@@ -205,8 +208,8 @@ static int create_veth(Err* err, struct nl_sock* sk, int container_netns_fd, con
 	}
 
 	// create an rtnl_link to contain solely the desired change diff
-	changes_link = rtnl_link_alloc();
-	if (!changes_link) {
+	container_veth_changes_link = rtnl_link_alloc();
+	if (!container_veth_changes_link) {
 		fprintf(stderr, "failure allocating rtnl_link\n");
 		// todo: free resources
 		ERR(err, "Failure allocating rtnl_link");
@@ -214,12 +217,13 @@ static int create_veth(Err* err, struct nl_sock* sk, int container_netns_fd, con
 	}
 
 	// set interface; set the new desired network namespace (container's)
-	rtnl_link_set_ifindex(changes_link, ifidx);
-	rtnl_link_set_ns_fd(changes_link, container_netns_fd);
-	rtnl_link_set_name(changes_link, container_veth_name);
+	rtnl_link_set_ifindex(container_veth_changes_link, ifidx);
+	rtnl_link_set_ns_fd(container_veth_changes_link, container_netns_fd);
+	rtnl_link_set_name(container_veth_changes_link, container_veth_name);
+	rtnl_link_set_flags(container_veth_changes_link, IFF_UP);
 
 	// apply changes (to change container's veth network namespace)
-	if (nl_err = rtnl_link_change(sk, peer_link, changes_link, 0)) {
+	if (nl_err = rtnl_link_change(sk, container_veth_link, container_veth_changes_link, 0)) {
 		fprintf(stderr, "failure moving veth to container network namespace: %s\n", nl_geterror(nl_err));
 		// todo: free resources
 		ERRF(err, "Failure moving veth to container network namespace", "%s", nl_geterror(nl_err));
@@ -232,8 +236,32 @@ static int create_veth(Err* err, struct nl_sock* sk, int container_netns_fd, con
 		return 1;
 	}
 
-	rtnl_link_put(peer_link);
-	rtnl_link_put(changes_link);
+	// fetches a reference (rtnl_link) to container's veth interface from kernel
+	if (nl_err = rtnl_link_get_kernel(sk, 0, host_veth_name, &host_veth_link)) {
+		fprintf(stderr, "failure filling rtnl_link information from kernel: %s\n", nl_geterror(nl_err));
+		// todo: free resources
+		ERRF(err, "Failure filling rtnl_link information from kernel", "%s", nl_geterror(nl_err));
+		return 1;
+	}
+
+	// create an rtnl_link to contain solely the desired change diff
+	host_veth_changes_link = rtnl_link_alloc();
+	if (!host_veth_changes_link) {
+		fprintf(stderr, "failure allocating rtnl_link\n");
+		// todo: free resources
+		ERR(err, "Failure allocating rtnl_link");
+		return 1;
+	}
+
+	rtnl_link_set_flags(host_veth_changes_link, IFF_UP);
+
+	if (nl_err = rtnl_link_change(sk, host_veth_link, host_veth_changes_link, 0)) {
+		fprintf(stderr, "failure activating host's veth: %s\n", nl_geterror(nl_err));
+		// todo: free resources
+		ERRF(err, "Failure activating host's veth", "%s", nl_geterror(nl_err));
+		return 1;
+	}
+
 	return 0;
 }
 

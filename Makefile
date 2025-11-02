@@ -44,7 +44,7 @@ kind:
 .PHONY: k8s-deploy-resources
 k8s-deploy-resources:
 	@echo "[sknf] Deleting resources..."
-	kubectl delete -f ./sknf-app/k8s/daemonset.yaml -f ./sknf-app/k8s/rbac.yaml
+	kubectl delete -f ./sknf-app/k8s/daemonset.yaml -f ./sknf-app/k8s/rbac.yaml || true
 	@echo "[sknf] Loading resources..."
 	kubectl apply -f ./sknf-app/k8s/rbac.yaml -f ./sknf-app/k8s/daemonset.yaml
 	@echo "[sknf] Loaded successfully."
