@@ -27,9 +27,9 @@ static void emit_add_response(const struct Args* args, const char* container_net
 	json_object_array_add(ips_arr, ip_obj);
 	json_object_object_add(json_response_obj, "ips", ips_arr);
 
-    if (args->prev_result != NULL) {
-        json_object_object_add(json_response_obj, "prevResult", args->prev_result);
-    }
+	if (args->prev_result != NULL) {
+		json_object_object_add(json_response_obj, "prevResult", args->prev_result);
+	}
 
 	fprintf(stderr, "emit_response: emitting response: %s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
 	printf("%s\n", json_object_to_json_string_ext(json_response_obj, JSON_C_TO_STRING_PLAIN));
@@ -67,10 +67,10 @@ static void emit_error_response(Err err) {
 }
 
 int cmd_add(const struct Args* args) {
-    // TODO: Return error if interface already exists in container
+	// TODO: Return error if interface already exists in container
 
-    // TODO: set IP to interface
-    // TODO: set routes (probably not needed for L2 communication)
+	// TODO: set IP to interface
+	// TODO: set routes (probably not needed for L2 communication)
 
 	Err err;
 	ERR_INIT(&err);
@@ -96,20 +96,20 @@ int cmd_add(const struct Args* args) {
 	}
 
 	emit_add_response(args, container_netif_cidr);
-    return 0;
+	return 0;
 }
 
 int cmd_del(const struct Args* args) {
 	Err err;
 	ERR_INIT(&err);
 
-    if (network_detach_container(&err, args->cni_netns, args->cni_ifname, args->cni_containerid)) {
+	if (network_detach_container(&err, args->cni_netns, args->cni_ifname, args->cni_containerid)) {
 		fprintf(stderr, "failure detaching container network\n");
 		emit_error_response(err);
 		return 1;
-    }
+	}
 
-    return 0;
+	return 0;
 }
 
 int cmd_status(const struct Args* args) {

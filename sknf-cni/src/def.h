@@ -10,4 +10,6 @@
 
 #define CNI_VERSION "0.4.0"
 
+#define CIDR_BUFFER_LEN 64
+
 #endif

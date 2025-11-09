@@ -1,9 +1,9 @@
-CNI_SRC := sknf-cni/src/args.c sknf-cni/src/cmd.c sknf-cni/src/err.c sknf-cni/src/io.c sknf-cni/src/ip.c sknf-cni/src/main.c sknf-cni/src/network.c sknf-cni/src/util.c
+CNI_SRC := sknf-cni/src/args.c sknf-cni/src/cmd.c sknf-cni/src/err.c sknf-cni/src/io.c sknf-cni/src/ip.c sknf-cni/src/main.c sknf-cni/src/network.c sknf-cni/src/nft.c sknf-cni/src/util.c
 CNI_BIN := sknf-cni/bin/sknf-cni
 CNI_CFLAGS := -O0 -g -Wall -Wno-parentheses
 CNI_LDFLAGS := -static
-CNI_PKG_CFLAGS := $(shell pkg-config --cflags libnl-3.0 libnl-route-3.0 json-c)
-CNI_PKG_LIBS   := $(shell pkg-config --libs --static libnl-3.0 libnl-route-3.0 json-c)
+CNI_PKG_CFLAGS := $(shell pkg-config --cflags libnl-3.0 libnl-route-3.0 libnftnl libmnl json-c)
+CNI_PKG_LIBS   := $(shell pkg-config --libs --static libnl-3.0 libnl-route-3.0 libnftnl libmnl json-c)
 
 APP_DIR := sknf-app
 APP_BIN := $(APP_DIR)/bin/sknf-app

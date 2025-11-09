@@ -22,6 +22,7 @@
 #include <netlink/addr.h>
 
 #include "util.h"
+#include "nft.h"
 
 #define VXLAN_VNI_ID 100
 #define VXLAN_GROUP "239.1.1.100"
@@ -317,11 +318,11 @@ static int configure_container_veth(Err* err, int container_netns_fd, const char
 		return 1;
 	}
 
-	//if (add_routing_rule(err, sk, "0.0.0.0/0", bridge_cidr, ifidx)) {
-	//	fprintf(stderr, "failed to add default gateway to container's net ns\n");
-	//	// todo: free resources
-	//	return 1;
-	//}
+	if (add_routing_rule(err, sk, "0.0.0.0/0", bridge_cidr, ifidx)) {
+		fprintf(stderr, "failed to add default gateway to container's net ns\n");
+		// todo: free resources
+		return 1;
+	}
 
 	if (setns(main_netns_fd, CLONE_NEWNET)) {
 		fprintf(stderr, "failure re-associating thread to main net ns: %s\n", strerror(errno));
@@ -534,6 +535,14 @@ int network_attach_container(Err* err, const char* container_netns_name, const c
 
 	if (attach_ifs_to_bridge(err, sk, host_if_name)) {
 		fprintf(stderr, "failure attaching veth to bridge\n");
+		// todo: free resources
+		return 1;
+	}
+
+	// create nftables NAT rule to ensure packets leaving the cluster are NAT'd with host's physical IP as SRC IP
+	// (to ensure response is routable)
+	if (nft_nat_rule(err, HOST_PHYSICAL_IF, container_netif_cidr)) {
+		fprintf(stderr, "failure creating nft NAT rule\n");
 		// todo: free resources
 		return 1;
 	}

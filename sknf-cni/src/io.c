@@ -8,16 +8,16 @@
 #include <string.h>
 
 int io_file_exists(const char *path) {
-    if (!path) {
-        return 0;
-    }
+	if (!path) {
+		return 0;
+	}
 
-    FILE *file = fopen(path, "r");
-    if (file) {
-        fclose(file);
-        return 1;
-    }
-    return 0;
+	FILE *file = fopen(path, "r");
+	if (file) {
+		fclose(file);
+		return 1;
+	}
+	return 0;
 }
 
 int io_read_file_into(const char *path, char *buf, size_t bufsize, size_t *out_len) {
@@ -45,7 +45,7 @@ int io_read_file_into(const char *path, char *buf, size_t bufsize, size_t *out_l
 		if (n == 0) {
 			if (feof(f)) break;
 			if (ferror(f)) {
-                fprintf(stderr, "io_read_file_into: fread %s", strerror(errno));
+				fprintf(stderr, "io_read_file_into: fread %s", strerror(errno));
 				fclose(f);
 				return -1;
 			}

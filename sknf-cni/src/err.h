@@ -5,10 +5,10 @@
 #define ERR_DETAILS_MAX_SIZE 1024
 
 typedef struct Err {
-    int initialized;
-    int code;
-    char msg[ERR_MSG_MAX_SIZE];
-    char details[ERR_DETAILS_MAX_SIZE];
+	int initialized;
+	int code;
+	char msg[ERR_MSG_MAX_SIZE];
+	char details[ERR_DETAILS_MAX_SIZE];
 } Err;
 
 void ERR_INIT(Err* err);

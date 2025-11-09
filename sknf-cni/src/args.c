@@ -28,64 +28,64 @@ static void mock_stdin_input() {
 }
 
 static int args_validate_add_cmd(struct Args* args) {
-    if (args->cni_version == NULL) {
-        fprintf(stderr, "Failure: missing CNI version\n");
-        return 1;
-    }
+	if (args->cni_version == NULL) {
+		fprintf(stderr, "Failure: missing CNI version\n");
+		return 1;
+	}
 
-    if (args->name == NULL) {
-        fprintf(stderr, "Failure: missing name\n");
-        return 1;
-    }
+	if (args->name == NULL) {
+		fprintf(stderr, "Failure: missing name\n");
+		return 1;
+	}
 
-    if (args->type == NULL) {
-        fprintf(stderr, "Failure: missing type\n");
-        return 1;
-    }
+	if (args->type == NULL) {
+		fprintf(stderr, "Failure: missing type\n");
+		return 1;
+	}
 
-    if (args->subnet == NULL) {
-        fprintf(stderr, "Failure: missing subnet\n");
-        return 1;
-    }
+	if (args->subnet == NULL) {
+		fprintf(stderr, "Failure: missing subnet\n");
+		return 1;
+	}
 
-    if (args->cni_command == NULL) {
-        fprintf(stderr, "Failure: missing CNI command\n");
-        return 1;
-    }
+	if (args->cni_command == NULL) {
+		fprintf(stderr, "Failure: missing CNI command\n");
+		return 1;
+	}
 
-    if (args->cni_containerid == NULL) {
-        fprintf(stderr, "Failure: missing CNI containerid\n");
-        return 1;
-    }
+	if (args->cni_containerid == NULL) {
+		fprintf(stderr, "Failure: missing CNI containerid\n");
+		return 1;
+	}
 
-    if (args->cni_netns == NULL) {
-        fprintf(stderr, "Failure: missing CNI netns\n");
-        return 1;
-    }
+	if (args->cni_netns == NULL) {
+		fprintf(stderr, "Failure: missing CNI netns\n");
+		return 1;
+	}
 
-    if (args->cni_ifname == NULL) {
-        fprintf(stderr, "Failure: missing CNI ifname\n");
-        return 1;
-    }
+	if (args->cni_ifname == NULL) {
+		fprintf(stderr, "Failure: missing CNI ifname\n");
+		return 1;
+	}
 
-    if (args->cni_path == NULL) {
-        fprintf(stderr, "Failure: missing CNI path\n");
-        return 1;
-    }
+	if (args->cni_path == NULL) {
+		fprintf(stderr, "Failure: missing CNI path\n");
+		return 1;
+	}
 
-    return 0;
+	return 0;
 }
 
 static int args_validate_del_cmd(struct Args* args) {
-    return 0;
+	return 0;
 }
 
 static int args_validate_check_cmd(struct Args* args) {
-    return 0;
+	return 0;
 }
 
 int args_parse(struct Args* args) {
-    memset(args, 0, sizeof(struct Args));
+	memset(args, 0, sizeof(struct Args));
 
 	size_t n = fread(input_buffer, 1, sizeof(input_buffer) - 1, stdin);
 	input_buffer[n] = '\0';
@@ -102,24 +102,24 @@ int args_parse(struct Args* args) {
 	struct json_object* prev_result_obj;
 
 	if (json_object_object_get_ex(args->json_input, CNI_VERSION_STDIN_JSON_KEY, &cni_version_obj)) {
-        args->cni_version = json_object_get_string(cni_version_obj);
+		args->cni_version = json_object_get_string(cni_version_obj);
 	}
 
 	if (json_object_object_get_ex(args->json_input, NAME_STDIN_JSON_KEY, &name_obj)) {
-        args->name = json_object_get_string(name_obj);
+		args->name = json_object_get_string(name_obj);
 	}
 
 	if (json_object_object_get_ex(args->json_input, TYPE_STDIN_JSON_KEY, &type_obj)) {
-        args->type = json_object_get_string(type_obj);
+		args->type = json_object_get_string(type_obj);
 	}
 
 	if (json_object_object_get_ex(args->json_input, SUBNET_STDIN_JSON_KEY, &subnet_obj)) {
-        args->subnet = json_object_get_string(subnet_obj);
+		args->subnet = json_object_get_string(subnet_obj);
 	}
 
-    if (json_object_object_get_ex(args->json_input, PREV_RESULT_STDIN_JSON_KEY, &prev_result_obj)) {
-        args->prev_result = prev_result_obj;
-    }
+	if (json_object_object_get_ex(args->json_input, PREV_RESULT_STDIN_JSON_KEY, &prev_result_obj)) {
+		args->prev_result = prev_result_obj;
+	}
 
 	args->cni_command = getenv(CNI_COMMAND_ENV_VAR_NAME);
 	args->cni_containerid = getenv(CNI_CONTAINERID_ENV_VAR_NAME);
@@ -127,34 +127,34 @@ int args_parse(struct Args* args) {
 	args->cni_ifname = getenv(CNI_IFNAME_ENV_VAR_NAME);
 	args->cni_path = getenv(CNI_PATH_ENV_VAR_NAME);
 
-    if (args->cni_command == NULL) {
-        fprintf(stderr, "Failure: missing CNI command\n");
-        return 1;
-    }
+	if (args->cni_command == NULL) {
+		fprintf(stderr, "Failure: missing CNI command\n");
+		return 1;
+	}
 
 	if (strcmp(args->cni_version, CNI_VERSION)) {
 		fprintf(stderr, "Falure: unsupported CNI version, requires %s, received %s\n", CNI_VERSION, args->cni_version);
 		return 1;
 	}
 
-    if (!strcmp(args->cni_command, CNI_CMD_ADD)) {
-        if (args_validate_add_cmd(args)) {
-            args_free(args);
-            return 1;
-        }
-    } else if (!strcmp(args->cni_command, CNI_CMD_DEL)) {
-        if (args_validate_del_cmd(args)) {
-            args_free(args);
-            return 1;
-        }
-    } else if (!strcmp(args->cni_command, CNI_CMD_CHECK)) {
-        if (args_validate_check_cmd(args)) {
-            args_free(args);
-            return 1;
-        }
-    }
+	if (!strcmp(args->cni_command, CNI_CMD_ADD)) {
+		if (args_validate_add_cmd(args)) {
+			args_free(args);
+			return 1;
+		}
+	} else if (!strcmp(args->cni_command, CNI_CMD_DEL)) {
+		if (args_validate_del_cmd(args)) {
+			args_free(args);
+			return 1;
+		}
+	} else if (!strcmp(args->cni_command, CNI_CMD_CHECK)) {
+		if (args_validate_check_cmd(args)) {
+			args_free(args);
+			return 1;
+		}
+	}
 
-    return 0;
+	return 0;
 }
 
 void args_print(const struct Args* args) {
@@ -169,5 +169,5 @@ void args_print(const struct Args* args) {
 }
 
 void args_free(struct Args* args) {
-    json_object_put(args->json_input);
+	json_object_put(args->json_input);
 }
