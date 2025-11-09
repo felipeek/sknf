@@ -26,8 +26,6 @@
 
 #define VXLAN_VNI_ID 100
 #define VXLAN_GROUP "239.1.1.100"
-//#define HOST_PHYSICAL_IF "enp5s0"
-#define HOST_PHYSICAL_IF "eth0"
 
 static void generate_deterministic_host_if_name(Err* err, char buffer[16], const char* container_netns_name,
 		const char* container_netif_name, const char* container_id) {
@@ -215,7 +213,7 @@ static int create_bridge(Err* err, struct nl_sock* sk, const char* bridge_cidr) 
 	return 0;
 }
 
-static int create_vxlan(Err* err, struct nl_sock* sk) {
+static int create_vxlan(Err* err, struct nl_sock* sk, const char* host_physical_if) {
 	int nl_err;
 	int existing_ifidx = if_nametoindex(HOST_VXLAN_NAME);
 	if (existing_ifidx != 0) {
@@ -246,7 +244,7 @@ static int create_vxlan(Err* err, struct nl_sock* sk) {
 	rtnl_link_set_flags(vxlan_link, IFF_UP);
 
 	// todo: discover this dynamically
-	int ifindex = if_nametoindex(HOST_PHYSICAL_IF);
+	int ifindex = if_nametoindex(host_physical_if);
 	rtnl_link_vxlan_set_link(vxlan_link, ifindex);
 
 	if (nl_err = rtnl_link_add(sk, vxlan_link, NLM_F_CREATE)) {
@@ -483,7 +481,7 @@ static int attach_ifs_to_bridge(Err* err, struct nl_sock* sk, const char* host_v
 }
 
 int network_attach_container(Err* err, const char* container_netns_name, const char* container_netif_name,
-		const char* container_netif_cidr, const char* container_id, const char* bridge_cidr) {
+		const char* container_netif_cidr, const char* container_id, const char* bridge_cidr, const char* host_physical_if) {
 	int nl_err;
 
 	// Create netlink socket
@@ -521,7 +519,7 @@ int network_attach_container(Err* err, const char* container_netns_name, const c
 		return 1;
 	}
 
-	if (create_vxlan(err, sk)) {
+	if (create_vxlan(err, sk, host_physical_if)) {
 		fprintf(stderr, "failure creating vxlan\n");
 		// todo: free resources
 		return 1;
@@ -541,7 +539,7 @@ int network_attach_container(Err* err, const char* container_netns_name, const c
 
 	// create nftables NAT rule to ensure packets leaving the cluster are NAT'd with host's physical IP as SRC IP
 	// (to ensure response is routable)
-	if (nft_nat_rule(err, HOST_PHYSICAL_IF, container_netif_cidr)) {
+	if (nft_nat_rule(err, host_physical_if, container_netif_cidr)) {
 		fprintf(stderr, "failure creating nft NAT rule\n");
 		// todo: free resources
 		return 1;

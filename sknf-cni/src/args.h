@@ -6,6 +6,8 @@ struct Args {
 	const char* name;
 	const char* type;
 	const char* subnet;
+	const char* cluster_cidr;
+	const char* host_physical_interface;
 	const char* cni_command;
 	const char* cni_containerid;
 	const char* cni_netns;

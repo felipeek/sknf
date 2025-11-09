@@ -7,7 +7,7 @@
 #define HOST_VXLAN_NAME "vxsknf"
 #define HOST_VETH_PREFIX "vethsknf-"
 
-int network_attach_container(Err* err, const char* container_netns_name, const char* container_netif_name, const char* container_netif_cidr, const char* container_id, const char* bridge_cidr);
+int network_attach_container(Err* err, const char* container_netns_name, const char* container_netif_name, const char* container_netif_cidr, const char* container_id, const char* bridge_cidr, const char* host_physical_if);
 int network_detach_container(Err* err, const char* container_netns_name, const char* container_netif_name, const char* container_id);
 
 #endif

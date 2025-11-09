@@ -47,6 +47,10 @@ spec:
         - name: host-cni-conf
           mountPath: /host/etc/cni/net.d
         env:
+        - name: CLUSTER_CIDR
+          value: 10.244.0.0/16
+        - name: HOST_PHYSICAL_IF
+          value: eth0
         - name: CNI_PLUGIN_BINARY_CONTAINER_PATH_ENV_KEY
           value: /home/sknf/sknf-cni/bin/sknf-cni
         - name: CNI_PLUGIN_CONF_CONTAINER_PATH_ENV_KEY

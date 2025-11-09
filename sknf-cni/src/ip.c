@@ -31,80 +31,100 @@ static int get_first_allocable_ip(Err* err, const char* cidr, char out[CIDR_BUFF
 	return 0;
 }
 
-int ip_bridge(Err* err, const char* cidr, char out[CIDR_BUFFER_LEN]) {
-	struct in_addr addr;
-	int prefix;
-	if (util_cidr_parse(err, cidr, &addr, &prefix)) {
-		fprintf(stderr, "ip_bridge: unable to parse CIDR %s\n", cidr);
+int ip_bridge(Err* err, const char* node_cidr, const char* cluster_cidr, char out[CIDR_BUFFER_LEN]) {
+	// Parse node CIDR
+	struct in_addr node_cidr_addr;
+	int node_cidr_prefix;
+	if (util_cidr_parse(err, node_cidr, &node_cidr_addr, &node_cidr_prefix)) {
+		fprintf(stderr, "ip_bridge: unable to parse node CIDR %s\n", node_cidr);
 		return 1;
 	}
 
-	uint32_t ip_int = ntohl(addr.s_addr);
+	// Parse cluster CIDR
+	struct in_addr cluster_cidr_addr;
+	int cluster_cidr_prefix;
+	if (util_cidr_parse(err, cluster_cidr, &cluster_cidr_addr, &cluster_cidr_prefix)) {
+		fprintf(stderr, "ip_bridge: unable to parse cluster CIDR %s\n", cluster_cidr);
+		return 1;
+	}
+
+	// Increment node CIDR one unit (we assign the first IP to the bridge)
+	uint32_t ip_int = ntohl(node_cidr_addr.s_addr);
 	// no subnet checking yet
 	++ip_int; // get first IP
-	addr.s_addr = htonl(ip_int);
+	node_cidr_addr.s_addr = htonl(ip_int);
 
-	//if (util_cidr_serialize(err, addr, prefix, out)) {
-	// temporary (maybe); ensure that CIDR prefix comprises whole cluster to make inter-node packets routable
-	if (util_cidr_serialize(err, addr, 16, out)) {
+	// serialize as <bridge-IP>/<clusterWideCidrPrefix> for completeness, as the virtual L2 domain comprises the whole cluster
+	if (util_cidr_serialize(err, node_cidr_addr, cluster_cidr_prefix, out)) {
 		fprintf(stderr, "ip_bridge: unable to serialize CIDR\n");
 		return 1;
 	}
 	return 0;
 }
 
-int ip_acquire(Err* err, const char* cidr, char out[CIDR_BUFFER_LEN]) {
+int ip_container_acquire(Err* err, const char* node_cidr, const char* cluster_cidr, char out[CIDR_BUFFER_LEN]) {
 	size_t file_length = 0;
+	char last_acquired_cidr[CIDR_BUFFER_LEN];
 
 	if (io_file_exists(IP_INFO_FILE_PATH)) {
 		// If the file already exists, then we get the last IP from the file
 
-		int rc = io_read_file_into(IP_INFO_FILE_PATH, out, CIDR_BUFFER_LEN, &file_length);
+		int rc = io_read_file_into(IP_INFO_FILE_PATH, last_acquired_cidr, CIDR_BUFFER_LEN, &file_length);
 		if (rc != 0) {
-			fprintf(stderr, "ip_acquire: failure reading '%s' (rc=%d)\n", IP_INFO_FILE_PATH, rc);
-			ERRF(err, "Ip_acquire: failure reading file", "'%s' (rc=%d)", IP_INFO_FILE_PATH, rc);
+			fprintf(stderr, "ip_container_acquire: failure reading '%s' (rc=%d)\n", IP_INFO_FILE_PATH, rc);
+			ERRF(err, "ip_container_acquire: failure reading file", "'%s' (rc=%d)", IP_INFO_FILE_PATH, rc);
 			return 1;
 		}
 
 		// Trim trailing whitespace and ensure NUL
 		while (file_length > 0 &&
-			   (out[file_length-1] == '\n' ||
-				out[file_length-1] == '\r' ||
-				out[file_length-1] == ' '  ||
-				out[file_length-1] == '\t')) {
-			out[--file_length] = '\0';
+			(last_acquired_cidr[file_length-1] == '\n' ||
+				last_acquired_cidr[file_length-1] == '\r' ||
+				last_acquired_cidr[file_length-1] == ' '  ||
+				last_acquired_cidr[file_length-1] == '\t')) {
+			last_acquired_cidr[--file_length] = '\0';
 		}
-		out[file_length] = '\0';
+		last_acquired_cidr[file_length] = '\0';
 	} else {
 		// Otherwise, consider the CIDR parameter
-		if (get_first_allocable_ip(err, cidr, out)) {
-			fprintf(stderr, "ip_acquire: failure retrieving first allocable ip\n");
+		if (get_first_allocable_ip(err, node_cidr, last_acquired_cidr)) {
+			fprintf(stderr, "ip_container_acquire: failure retrieving first allocable ip\n");
 			return 1;
 		}
 	}
 
-	struct in_addr addr;
-	int prefix;
-	if (util_cidr_parse(err, out, &addr, &prefix)) {
-		fprintf(stderr, "ip_acquire: unable to parse CIDR %s\n", out);
+	// Parse last acquired CIDR
+	struct in_addr last_acquired_cidr_addr;
+	int last_acquired_cidr_prefix;
+	if (util_cidr_parse(err, last_acquired_cidr, &last_acquired_cidr_addr, &last_acquired_cidr_prefix)) {
+		fprintf(stderr, "ip_container_acquire: unable to parse last acquired CIDR %s\n", out);
 		return 1;
 	}
 
-	uint32_t ip_int = ntohl(addr.s_addr);
-	++ip_int; // no subnet checking yet
-	addr.s_addr = htonl(ip_int);
+	// Parse cluster CIDR
+	struct in_addr cluster_cidr_addr;
+	int cluster_cidr_prefix;
+	if (util_cidr_parse(err, cluster_cidr, &cluster_cidr_addr, &cluster_cidr_prefix)) {
+		fprintf(stderr, "ip_bridge: unable to parse cluster CIDR %s\n", cluster_cidr);
+		return 1;
+	}
 
-	//if (util_cidr_serialize(err, addr, prefix, out)) {
-	// temporary (maybe); ensure that CIDR prefix comprises whole cluster to make inter-node packets routable
-	if (util_cidr_serialize(err, addr, 16, out)) {
-		fprintf(stderr, "ip_acquire: unable to serialize CIDR\n");
+	uint32_t ip_int = ntohl(last_acquired_cidr_addr.s_addr);
+	++ip_int; // no subnet checking yet
+	last_acquired_cidr_addr.s_addr = htonl(ip_int);
+
+	// serialize as <bridge-IP>/<clusterWideCidrPrefix> because the virtual L2 domain comprises the whole cluster
+	// this is necessary to ensure that the container will consider other containers/pods that are living in other nodes
+	// to be on-link in its L2 domain, thus dispatching these frames on-link
+	if (util_cidr_serialize(err, last_acquired_cidr_addr, cluster_cidr_prefix, out)) {
+		fprintf(stderr, "ip_container_acquire: unable to serialize node CIDR\n");
 		return 1;
 	}
 
 	// Persist the full CIDR
 	if (io_write_text(IP_INFO_FILE_PATH, out) != 0) {
-		fprintf(stderr, "ip_acquire: failed writing '%s'\n", out);
-		ERRF(err, "Ip_acquire: failed writing", "'%s'", out);
+		fprintf(stderr, "ip_container_acquire: failed writing '%s'\n", out);
+		ERRF(err, "ip_container_acquire: failed writing", "'%s'", out);
 		return 1;
 	}
 

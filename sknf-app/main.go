@@ -15,9 +15,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const NODE_NAME_ENV_KEY = "NODE_NAME"
 const CNI_PLUGIN_BINARY_CONTAINER_PATH_ENV_KEY = "CNI_PLUGIN_BINARY_PATH"
 const CNI_PLUGIN_CONF_CONTAINER_PATH_ENV_KEY = "CNI_PLUGIN_CONF_PATH"
+const CLUSTER_CIDR_ENV_KEY = "CLUSTER_CIDR"
+const HOST_PHYSICAL_IF_ENV_KEY = "HOST_PHYSICAL_IF"
+const NODE_NAME_ENV_KEY = "NODE_NAME"
 
 const CNI_PLUGIN_BINARY_CONTAINER_PATH_DEFAULT = "sknf-cni/bin/sknf-cni"
 const CNI_PLUGIN_CONF_CONTAINER_PATH_DEFAULT = "sknf-cni/conf/sknf-conf.json"
@@ -29,9 +31,21 @@ func main() {
 	nodeName := os.Getenv(NODE_NAME_ENV_KEY)
 	cniPluginBinaryContainerPath := os.Getenv(CNI_PLUGIN_BINARY_CONTAINER_PATH_ENV_KEY)
 	cniPluginConfContainerPath := os.Getenv(CNI_PLUGIN_CONF_CONTAINER_PATH_ENV_KEY)
+	clusterCidr := os.Getenv(CLUSTER_CIDR_ENV_KEY)
+	hostPhysicalIf := os.Getenv(HOST_PHYSICAL_IF_ENV_KEY)
 
 	if nodeName == "" {
 		fmt.Fprintf(os.Stderr, "[sknf] Missing env var %s\n", NODE_NAME_ENV_KEY)
+		os.Exit(1)
+	}
+
+	if clusterCidr == "" {
+		fmt.Fprintf(os.Stderr, "[sknf] Missing env var %s\n", CLUSTER_CIDR_ENV_KEY)
+		os.Exit(1)
+	}
+
+	if hostPhysicalIf == "" {
+		fmt.Fprintf(os.Stderr, "[sknf] Missing env var %s\n", HOST_PHYSICAL_IF_ENV_KEY)
 		os.Exit(1)
 	}
 
@@ -79,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cniPluginConfData := ReplaceSubnet(cniPluginConfTemplate, podCidr)
+	cniPluginConfData := ReplaceVariables(cniPluginConfTemplate, podCidr, clusterCidr, hostPhysicalIf)
 
 	err = util.WriteStringToFile(CNI_PLUGIN_CONF_HOST_PATH, cniPluginConfData)
 	if err != nil {
@@ -96,8 +110,12 @@ func main() {
 	fmt.Println("[sknf] Received shutdown signal, exiting")
 }
 
-func ReplaceSubnet(text, subnet string) string {
-	return strings.ReplaceAll(text, "{{SUBNET}}", subnet)
+func ReplaceVariables(text, subnet, clusterCidr, hostPhysicalIf string) string {
+	return strings.NewReplacer(
+		"{{SUBNET}}", subnet,
+		"{{CLUSTER_CIDR}}", clusterCidr,
+		"{{HOST_PHYSICAL_IF}}", hostPhysicalIf,
+	).Replace(text)
 }
 
 func GetNodePodCidr(clientset *kubernetes.Clientset, nodeName string) (string, error) {

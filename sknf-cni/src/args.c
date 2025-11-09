@@ -15,6 +15,8 @@
 #define NAME_STDIN_JSON_KEY "name"
 #define TYPE_STDIN_JSON_KEY "type"
 #define SUBNET_STDIN_JSON_KEY "subnet"
+#define CLUSTER_CIDR_STDIN_JSON_KEY "clusterCidr"
+#define HOST_PHYSICAL_INTERFACE_STDIN_JSON_KEY "hostPhysicalInterface"
 #define PREV_RESULT_STDIN_JSON_KEY "prevResult"
 
 // TODO: dynamic buffer
@@ -45,6 +47,16 @@ static int args_validate_add_cmd(struct Args* args) {
 
 	if (args->subnet == NULL) {
 		fprintf(stderr, "Failure: missing subnet\n");
+		return 1;
+	}
+
+	if (args->cluster_cidr == NULL) {
+		fprintf(stderr, "Failure: missing cluster cidr\n");
+		return 1;
+	}
+
+	if (args->host_physical_interface == NULL) {
+		fprintf(stderr, "Failure: missing host physical interface\n");
 		return 1;
 	}
 
@@ -99,6 +111,8 @@ int args_parse(struct Args* args) {
 	struct json_object* name_obj;
 	struct json_object* type_obj;
 	struct json_object* subnet_obj;
+	struct json_object* cluster_cidr_obj;
+	struct json_object* host_physical_interface_obj;
 	struct json_object* prev_result_obj;
 
 	if (json_object_object_get_ex(args->json_input, CNI_VERSION_STDIN_JSON_KEY, &cni_version_obj)) {
@@ -115,6 +129,14 @@ int args_parse(struct Args* args) {
 
 	if (json_object_object_get_ex(args->json_input, SUBNET_STDIN_JSON_KEY, &subnet_obj)) {
 		args->subnet = json_object_get_string(subnet_obj);
+	}
+
+	if (json_object_object_get_ex(args->json_input, CLUSTER_CIDR_STDIN_JSON_KEY, &cluster_cidr_obj)) {
+		args->cluster_cidr = json_object_get_string(cluster_cidr_obj);
+	}
+
+	if (json_object_object_get_ex(args->json_input, HOST_PHYSICAL_INTERFACE_STDIN_JSON_KEY, &host_physical_interface_obj)) {
+		args->host_physical_interface = json_object_get_string(host_physical_interface_obj);
 	}
 
 	if (json_object_object_get_ex(args->json_input, PREV_RESULT_STDIN_JSON_KEY, &prev_result_obj)) {
