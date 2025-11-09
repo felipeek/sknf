@@ -3,6 +3,7 @@
 set -u
 
 sudo ip link del brsknf
+sudo ip link del vxsknf
 sudo ip netns del testing
 sudo ip netns add testing
 sudo ip netns del testing2

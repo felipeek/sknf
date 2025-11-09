@@ -75,14 +75,21 @@ int cmd_add(const struct Args* args) {
 	Err err;
 	ERR_INIT(&err);
 
-	char container_netif_cidr[256];
-	if (ip_acquire(&err, args->subnet, container_netif_cidr, 256)) {
+	char bridge_cidr[CIDR_BUFFER_LEN];
+	char container_netif_cidr[CIDR_BUFFER_LEN];
+	if (ip_bridge(&err, args->subnet, bridge_cidr)) {
+		fprintf(stderr, "failure retrieving bridge IP address\n");
+		emit_error_response(err);
+		return 1;
+	}
+
+	if (ip_acquire(&err, args->subnet, container_netif_cidr)) {
 		fprintf(stderr, "failure acquiring an IP address\n");
 		emit_error_response(err);
 		return 1;
 	}
 
-	if (network_attach_container(&err, args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid)) {
+	if (network_attach_container(&err, args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid, bridge_cidr)) {
 		fprintf(stderr, "failure attaching container network\n");
 		emit_error_response(err);
 		return 1;

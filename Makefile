@@ -32,8 +32,23 @@ build-sknf-docker:
 	docker build . -t $(IMAGE_NAME) -f $(DOCKERFILE)
 	@echo "[sknf] Docker image built: $(IMAGE_NAME)"
 
+.PHONY: kind-create-cluster
+kind-create-cluster:
+	@echo "[sknf] Creating kind cluster (no CNI, 1 control-plane + 2 workers)..."
+	@printf '%s\n' \
+		"kind: Cluster" \
+		"apiVersion: kind.x-k8s.io/v1alpha4" \
+		"networking:" \
+		"  disableDefaultCNI: true" \
+		"nodes:" \
+		"- role: control-plane" \
+		"- role: worker" \
+		"- role: worker" \
+	| kind create cluster --name sknf --config -
+	@echo "[sknf] Kind cluster 'sknf' ready (CNI disabled)."
+
 .PHONY: kind-deploy-image
-kind:
+kind-deploy-image:
 	@echo "[sknf] Building Docker image..."
 	docker build . -t $(IMAGE_NAME) -f $(DOCKERFILE)
 	@echo "[sknf] Docker image built: $(IMAGE_NAME)"
