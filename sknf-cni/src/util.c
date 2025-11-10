@@ -42,8 +42,8 @@ int util_cidr_parse(Err* err, const char* cidr, struct in_addr* addr, int* prefi
 int util_cidr_serialize(Err* err, struct in_addr addr, int prefix, char out[CIDR_BUFFER_LEN]) {
 	char ip_only[INET_ADDRSTRLEN] = {0};
 	if (!inet_ntop(AF_INET, &addr, ip_only, sizeof(ip_only))) {
-		fprintf(stderr, "get_first_allocable_ip: inet_ntop failed\n");
-		ERR(err, "get_first_allocable_ip: inet_ntop failed");
+		fprintf(stderr, "util_cidr_serialize: inet_ntop failed\n");
+		ERR(err, "util_cidr_serialize: inet_ntop failed");
 		return 1;
 	}
 	snprintf(out, (size_t)CIDR_BUFFER_LEN, "%s/%d", ip_only, prefix);

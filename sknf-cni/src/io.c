@@ -28,7 +28,7 @@ int io_read_file_into(const char *path, char *buf, size_t bufsize, size_t *out_l
 
 	FILE *f = fopen(path, "rb");
 	if (!f) {
-		fprintf(stderr, "io_read_file_into: fopen %s", strerror(errno));
+		fprintf(stderr, "io_read_file_into: fopen\n");
 		return -1;
 	}
 
@@ -45,7 +45,7 @@ int io_read_file_into(const char *path, char *buf, size_t bufsize, size_t *out_l
 		if (n == 0) {
 			if (feof(f)) break;
 			if (ferror(f)) {
-				fprintf(stderr, "io_read_file_into: fread %s", strerror(errno));
+				fprintf(stderr, "io_read_file_into: fread\n");
 				fclose(f);
 				return -1;
 			}
@@ -72,7 +72,7 @@ int io_write_text(const char *path, const char *buf) {
 
 	FILE *f = fopen(path, "wb");
 	if (!f) {
-		fprintf(stderr, "io_read_file_into: fopen %s", strerror(errno));
+		fprintf(stderr, "io_read_file_into: fopen\n");
 		return -1;
 	}
 
@@ -89,7 +89,7 @@ int io_write_text(const char *path, const char *buf) {
 	}
 
 	if (fclose(f) != 0) {
-		fprintf(stderr, "io_read_file_into: fclose %s", strerror(errno));
+		fprintf(stderr, "io_read_file_into: fclose\n");
 		return -1;
 	}
 

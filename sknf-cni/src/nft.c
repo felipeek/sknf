@@ -28,6 +28,14 @@
 int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 	struct in_addr addr;
 	int prefix;
+
+	int rc = 1; // assume failure
+	struct mnl_socket* sk = NULL;
+	char buf[MNL_SOCKET_BUFFER_SIZE];
+	struct mnl_nlmsg_batch* batch = NULL;
+	int batch_stopped = 0; // track whether we called mnl_nlmsg_batch_stop
+	uint32_t seq = 0;
+
 	if (util_cidr_parse(err, cidr, &addr, &prefix)) {
 		fprintf(stderr, "unable to parse CIDR %s\n", cidr);
 		return 1;
@@ -35,35 +43,31 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 	uint32_t mask = (prefix == 0) ? 0 : htonl(0xFFFFFFFFu << (32 - prefix));
 	uint32_t net_be = addr.s_addr;
 
-	// Open netlink to nfnetlink
-	struct mnl_socket* sk = mnl_socket_open(NETLINK_NETFILTER);
+	sk = mnl_socket_open(NETLINK_NETFILTER);
 	if (!sk) {
 		fprintf(stderr, "failure opening mnl_socket: %s\n", strerror(errno));
 		ERRF(err, "Failure opening mnl_socket", "%s", strerror(errno));
-		return 1;
+		goto out;
 	}
 
 	if (mnl_socket_bind(sk, 0, MNL_SOCKET_AUTOPID) < 0) {
-		fprintf(stderr, "failure binding to mnl_socket: %s", strerror(errno));
+		fprintf(stderr, "failure binding to mnl_socket: %s\n", strerror(errno));
 		ERRF(err, "Failure binding to mnl_socket", "%s", strerror(errno));
-		return 1;
+		goto out;
 	}
 
 	int portid = mnl_socket_get_portid(sk);
 
-	char buf[MNL_SOCKET_BUFFER_SIZE];
-	struct mnl_nlmsg_batch* batch = mnl_nlmsg_batch_start(buf, sizeof(buf));
-	uint32_t seq = 0;
-
+	batch = mnl_nlmsg_batch_start(buf, sizeof(buf));
 	nftnl_batch_begin(mnl_nlmsg_batch_current(batch), ++seq);
 	mnl_nlmsg_batch_next(batch);
 
-	// Ensure nftables table SKNF_NF_TABLES_TABLE_NAME exists
+	// table
 	struct nftnl_table* t = nftnl_table_alloc();
 	if (!t) {
-		fprintf(stderr, "failure allocating nftl_table");
-		ERR(err, "Failure allocating nftl_table");
-		return 1;
+		fprintf(stderr, "failure allocating nftnl_table\n");
+		ERR(err, "Failure allocating nftnl_table");
+		goto out;
 	}
 	nftnl_table_set_str(t, NFTNL_TABLE_NAME, SKNF_NFTABLES_TABLE_NAME);
 	nftnl_table_set_u32(t, NFTNL_TABLE_FAMILY, NFPROTO_IPV4);
@@ -73,18 +77,16 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 		NLM_F_CREATE | NLM_F_ACK, ++seq
 	);
 	int table_seq = seq;
-
 	nftnl_table_nlmsg_build_payload(nlh, t);
 	mnl_nlmsg_batch_next(batch);
 	nftnl_table_free(t);
 
-	// Ensure nftables chain exists
-	//	chain postrouting { type nat hook postrouting priority srcnat; }
+	// chain
 	struct nftnl_chain* c = nftnl_chain_alloc();
 	if (!c) {
-		fprintf(stderr, "failure allocating nftnl_chain");
+		fprintf(stderr, "failure allocating nftnl_chain\n");
 		ERR(err, "Failure allocating nftnl_chain");
-		return 1;
+		goto out;
 	}
 	nftnl_chain_set_str(c, NFTNL_CHAIN_TABLE, SKNF_NFTABLES_TABLE_NAME);
 	nftnl_chain_set_str(c, NFTNL_CHAIN_NAME, SKNF_NFTABLES_POSTROUTING_CHAIN_NAME);
@@ -100,25 +102,17 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 	mnl_nlmsg_batch_next(batch);
 	nftnl_chain_free(c);
 
-	// Ensure nftables rule exists
-	// ip saddr <podCIDR> oifname "<oifname>" masquerade
-	//
-	// We implement CIDR match by:
-	//  - load ip saddr into reg1
-	//  - bitwise AND with mask -> reg1
-	//  - compare reg1 == (network & mask)
-	//  - also require meta oifname == "<oifname>"
-	//  - action: masquerade
+	// rule
 	struct nftnl_rule* r = nftnl_rule_alloc();
 	if (!r) {
-		fprintf(stderr, "failure allocating nftnl_rule");
+		fprintf(stderr, "failure allocating nftnl_rule\n");
 		ERR(err, "Failure allocating nftnl_rule");
-		return 1;
+		goto out;
 	}
 	nftnl_rule_set_str(r, NFTNL_RULE_TABLE, SKNF_NFTABLES_TABLE_NAME);
 	nftnl_rule_set_str(r, NFTNL_RULE_CHAIN, SKNF_NFTABLES_POSTROUTING_CHAIN_NAME);
 
-	// meta oifname → reg1 ; cmp reg1 == "<oifname>"
+	// meta oifname -> reg1 ; cmp reg1 == "<ifname>"
 	{
 		struct nftnl_expr *e_meta = nftnl_expr_alloc("meta");
 		nftnl_expr_set_u32(e_meta, NFTNL_EXPR_META_KEY, NFT_META_OIFNAME);
@@ -132,20 +126,20 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 		nftnl_rule_add_expr(r, e_cmp);
 	}
 
-	// payload load: ip saddr (network header offset 12) → reg1
+	// payload load saddr -> reg1
 	{
 		struct nftnl_expr *e = nftnl_expr_alloc("payload");
 		nftnl_expr_set_u32(e, NFTNL_EXPR_PAYLOAD_BASE, NFT_PAYLOAD_NETWORK_HEADER);
-		nftnl_expr_set_u32(e, NFTNL_EXPR_PAYLOAD_OFFSET, 12); // IPv4 saddr
+		nftnl_expr_set_u32(e, NFTNL_EXPR_PAYLOAD_OFFSET, 12);
 		nftnl_expr_set_u32(e, NFTNL_EXPR_PAYLOAD_LEN, 4);
 		nftnl_expr_set_u32(e, NFTNL_EXPR_PAYLOAD_DREG, NFT_REG_1);
 		nftnl_rule_add_expr(r, e);
 	}
 
-	// bitwise: reg1 = reg1 & mask
+	// bitwise AND with mask
 	{
-		struct nftnl_expr *e = nftnl_expr_alloc("bitwise");
 		uint32_t zero = 0;
+		struct nftnl_expr *e = nftnl_expr_alloc("bitwise");
 		nftnl_expr_set_u32(e, NFTNL_EXPR_BITWISE_SREG, NFT_REG_1);
 		nftnl_expr_set_u32(e, NFTNL_EXPR_BITWISE_DREG, NFT_REG_1);
 		nftnl_expr_set_u32(e, NFTNL_EXPR_BITWISE_LEN, 4);
@@ -154,7 +148,7 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 		nftnl_rule_add_expr(r, e);
 	}
 
-	// cmp reg1 == (net & mask)
+	// compare reg1 == net&mask
 	{
 		uint32_t net_and_mask = net_be & mask;
 		struct nftnl_expr *e = nftnl_expr_alloc("cmp");
@@ -167,7 +161,6 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 	// action: masquerade
 	{
 		struct nftnl_expr *e = nftnl_expr_alloc("masq");
-		// optional: NFTA_MASQ_FLAGS (e.g., RANDOM) via NFTNL_EXPR_MASQ_FLAGS
 		nftnl_rule_add_expr(r, e);
 	}
 
@@ -185,27 +178,28 @@ int nft_nat_rule(Err* err, const char* ifname, const char* cidr) {
 	if (mnl_socket_sendto(sk, mnl_nlmsg_batch_head(batch), mnl_nlmsg_batch_size(batch)) < 0) {
 		fprintf(stderr, "failure sending batch to configure nftables: %s\n", strerror(errno));
 		ERRF(err, "Failure sending batch to configure nftables", "%s", strerror(errno));
-		mnl_socket_close(sk);
-		return 1;
+		goto out;
 	}
 
 	mnl_nlmsg_batch_stop(batch);
+	batch_stopped = 1;
 
 	int ret = mnl_socket_recvfrom(sk, buf, sizeof(buf));
 	while (ret > 0) {
 		ret = mnl_cb_run(buf, ret, table_seq, portid, NULL, NULL);
-		if (ret <= 0) {
-			break;
-		}
+		if (ret <= 0) break;
 		ret = mnl_socket_recvfrom(sk, buf, sizeof(buf));
 	}
 	if (ret == -1) {
 		fprintf(stderr, "received error when consuming nft acks: %s\n", strerror(errno));
 		ERRF(err, "Received error when consuming nft acks", "%s", strerror(errno));
-		mnl_socket_close(sk);
-		return 1;
+		goto out;
 	}
 
-	mnl_socket_close(sk);
-	return 0;
+	rc = 0;
+
+out:
+	if (batch && !batch_stopped) mnl_nlmsg_batch_stop(batch);
+	if (sk) mnl_socket_close(sk);
+	return rc;
 }

@@ -151,11 +151,13 @@ int args_parse(struct Args* args) {
 
 	if (args->cni_command == NULL) {
 		fprintf(stderr, "Failure: missing CNI command\n");
+		args_free(args);
 		return 1;
 	}
 
 	if (strcmp(args->cni_version, CNI_VERSION)) {
 		fprintf(stderr, "Falure: unsupported CNI version, requires %s, received %s\n", CNI_VERSION, args->cni_version);
+		args_free(args);
 		return 1;
 	}
 
@@ -191,5 +193,8 @@ void args_print(const struct Args* args) {
 }
 
 void args_free(struct Args* args) {
-	json_object_put(args->json_input);
+	if (args->json_input) {
+		json_object_put(args->json_input);
+		args->json_input = NULL;
+	}
 }

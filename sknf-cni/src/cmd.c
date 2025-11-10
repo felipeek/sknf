@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "def.h"
 #include "ip.h"
-#include "network.h"
+#include "net.h"
 
 static void emit_add_response(const struct Args* args, const char* container_netif_cidr) {
 	struct json_object* json_response_obj = json_object_new_object();
@@ -68,10 +68,6 @@ static void emit_error_response(Err err) {
 
 int cmd_add(const struct Args* args) {
 	// TODO: Return error if interface already exists in container
-
-	// TODO: set IP to interface
-	// TODO: set routes (probably not needed for L2 communication)
-
 	Err err;
 	ERR_INIT(&err);
 
@@ -84,12 +80,12 @@ int cmd_add(const struct Args* args) {
 	}
 
 	if (ip_container_acquire(&err, args->subnet, args->cluster_cidr, container_netif_cidr)) {
-		fprintf(stderr, "failure acquiring an IP address\n");
+		fprintf(stderr, "failure acquiring an IP address for the container\n");
 		emit_error_response(err);
 		return 1;
 	}
 
-	if (network_attach_container(&err, args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid, bridge_cidr, args->host_physical_interface)) {
+	if (net_attach_container(&err, args->cni_netns, args->cni_ifname, container_netif_cidr, args->cni_containerid, bridge_cidr, args->host_physical_interface)) {
 		fprintf(stderr, "failure attaching container network\n");
 		emit_error_response(err);
 		return 1;
@@ -103,7 +99,7 @@ int cmd_del(const struct Args* args) {
 	Err err;
 	ERR_INIT(&err);
 
-	if (network_detach_container(&err, args->cni_netns, args->cni_ifname, args->cni_containerid)) {
+	if (net_detach_container(&err, args->cni_netns, args->cni_ifname, args->cni_containerid)) {
 		fprintf(stderr, "failure detaching container network\n");
 		emit_error_response(err);
 		return 1;

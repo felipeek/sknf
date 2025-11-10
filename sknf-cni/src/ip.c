@@ -62,13 +62,14 @@ int ip_bridge(Err* err, const char* node_cidr, const char* cluster_cidr, char ou
 	return 0;
 }
 
+// TODO: This function will not work properly if CNI plugin is invoked in multiple times in parallel, because we
+// don't lock on the file.
 int ip_container_acquire(Err* err, const char* node_cidr, const char* cluster_cidr, char out[CIDR_BUFFER_LEN]) {
 	size_t file_length = 0;
 	char last_acquired_cidr[CIDR_BUFFER_LEN];
 
 	if (io_file_exists(IP_INFO_FILE_PATH)) {
 		// If the file already exists, then we get the last IP from the file
-
 		int rc = io_read_file_into(IP_INFO_FILE_PATH, last_acquired_cidr, CIDR_BUFFER_LEN, &file_length);
 		if (rc != 0) {
 			fprintf(stderr, "ip_container_acquire: failure reading '%s' (rc=%d)\n", IP_INFO_FILE_PATH, rc);
@@ -97,7 +98,7 @@ int ip_container_acquire(Err* err, const char* node_cidr, const char* cluster_ci
 	struct in_addr last_acquired_cidr_addr;
 	int last_acquired_cidr_prefix;
 	if (util_cidr_parse(err, last_acquired_cidr, &last_acquired_cidr_addr, &last_acquired_cidr_prefix)) {
-		fprintf(stderr, "ip_container_acquire: unable to parse last acquired CIDR %s\n", out);
+		fprintf(stderr, "ip_container_acquire: unable to parse last acquired CIDR %s\n", last_acquired_cidr);
 		return 1;
 	}
 
@@ -122,6 +123,7 @@ int ip_container_acquire(Err* err, const char* node_cidr, const char* cluster_ci
 	}
 
 	// Persist the full CIDR
+	// TODO: This is not bulletproof, if multiple CNI plugin invokations change the file simultaneously bad things will happen
 	if (io_write_text(IP_INFO_FILE_PATH, out) != 0) {
 		fprintf(stderr, "ip_container_acquire: failed writing '%s'\n", out);
 		ERRF(err, "ip_container_acquire: failed writing", "'%s'", out);
