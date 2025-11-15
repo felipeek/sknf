@@ -5,6 +5,7 @@
 #include "def.h"
 #include "ip.h"
 #include "net.h"
+#include "sys.h"
 
 static void emit_add_response(const struct Args* args, const char* container_netif_cidr) {
 	struct json_object* json_response_obj = json_object_new_object();
@@ -70,6 +71,15 @@ int cmd_add(const struct Args* args) {
 	// TODO: Return error if interface already exists in container
 	Err err;
 	ERR_INIT(&err);
+
+	// enable br_netfilter
+	// this is necessary to ensure that reverse-DNAT is performed to packets when the response is received from
+	// a packet that was emitted through kube-proxy (cluster-ip)
+	if (sys_enable_br_netfilter(&err)) {
+		fprintf(stderr, "failure enabling br_netfilter\n");
+		emit_error_response(err);
+		return 1;
+	}
 
 	char bridge_cidr[CIDR_BUFFER_LEN];
 	char container_netif_cidr[CIDR_BUFFER_LEN];
